@@ -15,6 +15,26 @@ function safeEqual(a: string, b: string): boolean {
   return diff === 0
 }
 
+interface MessageData {
+  typeMessage?: string
+  textMessageData?: { textMessage?: string }
+  extendedTextMessageData?: { text?: string }
+  quotedMessage?: { stanzaId?: string; idMessage?: string }
+}
+
+function extractText(md: MessageData | undefined): string {
+  const direct = md?.textMessageData?.textMessage
+  if (direct && direct.trim().length > 0) return direct.trim()
+  const ext = md?.extendedTextMessageData?.text
+  return (ext ?? '').trim()
+}
+
+function extractQuotedWaId(md: MessageData | undefined): string | null {
+  const q = md?.quotedMessage
+  if (!q) return null
+  return (q.stanzaId || q.idMessage || '').trim() || null
+}
+
 export async function POST(
   req: Request,
   ctx: { params: Promise<{ token: string }> },
@@ -40,10 +60,9 @@ export async function POST(
     (payload.senderData as { sender?: string } | undefined)?.sender ?? '',
   )
   const senderPhone = sender.replace(/@c\.us$/, '').replace(/\D/g, '')
-  const text = String(
-    ((payload.messageData as { textMessageData?: { textMessage?: string } } | undefined)
-      ?.textMessageData?.textMessage) ?? '',
-  ).trim()
+  const messageData = payload.messageData as MessageData | undefined
+  const text = extractText(messageData)
+  const quotedWaId = extractQuotedWaId(messageData)
   const waMessageId = String(payload.idMessage ?? '')
 
   // Foreign sender → silently ignore (no info disclosure, no persistence).
@@ -68,9 +87,19 @@ export async function POST(
       },
     }))
 
+  // Resolve quoted-reply → focused task (Wave C).
+  let focusedTaskId: string | null = null
+  if (quotedWaId) {
+    const out = await prisma.outboundMessage.findFirst({
+      where: { waMessageId: quotedWaId },
+      select: { taskId: true },
+    })
+    focusedTaskId = out?.taskId ?? null
+  }
+
   try {
     const now = new Date()
-    const context = await buildContext(now, cfg)
+    const context = await buildContext(now, cfg, focusedTaskId)
     const intent = await parseCommand(cfg, text, context)
     const { reply } = await processCommand(intent, context)
 
@@ -84,7 +113,12 @@ export async function POST(
     })
     await prisma.inboundMessage.update({
       where: { id: inbound.id },
-      data: { processed: true, processedAt: new Date(), parsedAction: intent.kind },
+      data: {
+        processed: true,
+        processedAt: new Date(),
+        parsedAction: intent.kind,
+        matchedTaskId: focusedTaskId,
+      },
     })
   } catch {
     // Never retry-storm: ack 200 even on internal failure (raw already saved).

@@ -40,9 +40,59 @@ function normalizeCreate(input: TaskCreateInput) {
   }
 }
 
+// Auto-reminder helpers (Phase 2 — Green API).
+// Rule: when a Task has dueDate AND dueHasTime AND dueDate>now AND status is active,
+// keep exactly one SCHEDULED Reminder of type=AT_TIME on the task with scheduledFor=dueDate.
+// Removing/changing dueDate or completing/cancelling the task → cancel pending reminders.
+
+type ReminderTx = {
+  reminder: {
+    updateMany: (args: {
+      where: Record<string, unknown>
+      data: Record<string, unknown>
+    }) => Promise<{ count: number }>
+    create: (args: { data: Record<string, unknown> }) => Promise<unknown>
+  }
+}
+
+async function cancelPendingReminders(tx: ReminderTx, taskId: string): Promise<void> {
+  await tx.reminder.updateMany({
+    where: { taskId, status: 'SCHEDULED' },
+    data: { status: 'CANCELLED' },
+  })
+}
+
+async function syncAtTimeReminder(
+  tx: ReminderTx,
+  taskId: string,
+  dueDate: Date | null,
+  dueHasTime: boolean,
+  status: string,
+  now: Date,
+): Promise<void> {
+  // Always cancel pending first — idempotent.
+  await cancelPendingReminders(tx, taskId)
+
+  const isActive = status !== 'DONE' && status !== 'CANCELLED'
+  if (!isActive) return
+  if (!dueDate || !dueHasTime) return
+  if (dueDate.getTime() <= now.getTime()) return
+
+  await tx.reminder.create({
+    data: {
+      taskId,
+      type: 'AT_TIME',
+      channel: 'WHATSAPP',
+      scheduledFor: dueDate,
+      status: 'SCHEDULED',
+    },
+  })
+}
+
 export async function createTask(rawInput: unknown, actor: Actor = 'USER') {
   const input = taskCreateSchema.parse(rawInput)
   const data = normalizeCreate(input)
+  const now = new Date()
 
   const task = await prisma.$transaction(async (tx) => {
     const created = await tx.task.create({ data })
@@ -54,6 +104,14 @@ export async function createTask(rawInput: unknown, actor: Actor = 'USER') {
         payload: JSON.stringify({ initial: data }),
       },
     })
+    await syncAtTimeReminder(
+      tx as unknown as ReminderTx,
+      created.id,
+      created.dueDate,
+      created.dueHasTime,
+      created.status,
+      now,
+    )
     return created
   })
 
@@ -103,12 +161,28 @@ export async function updateTask(id: string, rawInput: unknown, actor: Actor = '
     }
   }
 
+  const now = new Date()
   const task = await prisma.$transaction(async (tx) => {
     const updated = await tx.task.update({ where: { id }, data: next })
     for (const ev of events) {
       await tx.taskEvent.create({
         data: { taskId: id, type: ev.type, actor, payload: ev.payload },
       })
+    }
+    // If anything reminder-relevant changed, re-sync.
+    if (
+      next.dueDate !== undefined ||
+      next.dueHasTime !== undefined ||
+      next.status !== undefined
+    ) {
+      await syncAtTimeReminder(
+        tx as unknown as ReminderTx,
+        id,
+        updated.dueDate,
+        updated.dueHasTime,
+        updated.status,
+        now,
+      )
     }
     return updated
   })
@@ -135,6 +209,7 @@ export async function completeTask(id: string, actor: Actor = 'USER') {
         payload: JSON.stringify({ from: existing.status, to: 'DONE' }),
       },
     })
+    await cancelPendingReminders(tx as unknown as ReminderTx, id)
     return updated
   })
 
@@ -147,6 +222,7 @@ export async function reopenTask(id: string, actor: Actor = 'USER') {
   if (!existing || existing.deletedAt) throw new Error('המשימה לא נמצאה')
   if (existing.status !== 'DONE') return existing
 
+  const now = new Date()
   const task = await prisma.$transaction(async (tx) => {
     const updated = await tx.task.update({
       where: { id },
@@ -160,6 +236,15 @@ export async function reopenTask(id: string, actor: Actor = 'USER') {
         payload: JSON.stringify({ from: 'DONE', to: 'OPEN' }),
       },
     })
+    // Re-create reminder if dueDate is still in the future.
+    await syncAtTimeReminder(
+      tx as unknown as ReminderTx,
+      id,
+      updated.dueDate,
+      updated.dueHasTime,
+      updated.status,
+      now,
+    )
     return updated
   })
 
@@ -185,6 +270,7 @@ export async function archiveTask(id: string) {
         payload: JSON.stringify({ archivedAt: updated.archivedAt }),
       },
     })
+    await cancelPendingReminders(tx as unknown as ReminderTx, id)
     return updated
   })
 
@@ -226,6 +312,7 @@ export async function softDeleteTask(id: string, actor: Actor = 'USER') {
     await tx.taskEvent.create({
       data: { taskId: id, type: 'DELETED', actor },
     })
+    await cancelPendingReminders(tx as unknown as ReminderTx, id)
   })
 
   revalidatePath('/all')

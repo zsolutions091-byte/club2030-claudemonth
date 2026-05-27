@@ -24,7 +24,7 @@ cssclasses:
 
 > [!abstract] Overview
 > - [[Project Overview]] — מה המערכת עושה ומה המגבלות
-> - [[Tech Stack]] — Next.js 16 / React 19 / Prisma 7 / SQLite
+> - [[Tech Stack]] — Next.js 16 / React 19 / Prisma 7 / PostgreSQL (Neon)
 > - [[Conventions]] — חוקי הכתיבה (RTL, עברית, soft delete)
 > - [[Roadmap]] — Phase 1 (single user) ↔ Phase 2 (WhatsApp)
 > - [[File Map]] — אינדקס לכל קובץ קוד משמעותי

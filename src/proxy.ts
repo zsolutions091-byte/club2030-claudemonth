@@ -4,7 +4,8 @@ import { NextRequest, NextResponse } from 'next/server'
 // PRD §7.1 — Basic Auth single-user gate. Webhooks are excluded for Phase 2.
 
 export function proxy(req: NextRequest) {
-  if (req.nextUrl.pathname.startsWith('/api/webhooks/')) {
+  const { pathname } = req.nextUrl
+  if (pathname.startsWith('/api/webhooks/') || pathname.startsWith('/api/cron/')) {
     return NextResponse.next()
   }
 

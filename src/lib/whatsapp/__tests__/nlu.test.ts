@@ -8,7 +8,12 @@ vi.mock('@anthropic-ai/sdk', () => ({
 import { parseCommand } from '@/lib/whatsapp/nlu'
 
 const cfg = { anthropicApiKey: 'k', anthropicModel: 'claude-haiku-4-5' } as never
-const ctx = { tasks: [{ ref: 1, id: 'a', title: 'לקנות חלב', status: 'OPEN' }] }
+const ctx = {
+  tasks: [{ ref: 1, id: 'a', title: 'לקנות חלב', status: 'OPEN' }],
+  focusedTaskId: null,
+  projects: [],
+  tags: [],
+}
 
 describe('parseCommand', () => {
   it('maps a tool_use block to a normalized intent', async () => {

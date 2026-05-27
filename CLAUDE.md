@@ -14,8 +14,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Next.js 16.2** (App Router + Turbopack) — **לא** Next.js 14
 - **React 19**
-- **Prisma 7** עם adapter `@prisma/adapter-better-sqlite3`
-- **SQLite** (`dev.db`)
+- **Prisma 7** (default driver, ללא adapter)
+- **PostgreSQL** (Neon ב-production). `DATABASE_URL` ב-`.env`.
 - **Tailwind CSS 4** + **shadcn/ui** + **Base UI**
 - **Zod** + **react-hook-form** לטפסים
 - בעתיד: **Green API** ל-WhatsApp
@@ -50,7 +50,7 @@ npm run db:generate  # רגנרוט הקליינט (רץ אוטומטית ב-pos
 
 ### Prisma Client — נתיב מותאם
 
-הקליינט מיוצר ל-`src/generated/prisma/` (לא `@prisma/client` רגיל), ה-instance המשותף ב-`src/lib/db.ts` משתמש ב-`PrismaBetterSqlite3` adapter. תמיד `import { prisma } from '@/lib/db'`.
+הקליינט מיוצר ל-`src/generated/prisma/` (לא `@prisma/client` רגיל), ה-instance המשותף ב-`src/lib/db.ts` משתמש ב-driver הדיפולטי של Prisma מול Postgres. תמיד `import { prisma } from '@/lib/db'`.
 
 ### Soft Delete
 
@@ -58,7 +58,7 @@ npm run db:generate  # רגנרוט הקליינט (רץ אוטומטית ב-pos
 
 ### Authentication
 
-`src/proxy.ts` (Next.js 16 — מה שהיה `middleware.ts`) מיישם Basic Auth single-user מול `BASIC_AUTH_USER`/`BASIC_AUTH_PASS` ב-`.env`. נתיבי `/api/webhooks/*` עוברים bypass עבור webhooks של Green API (Phase 2).
+`src/proxy.ts` (Next.js 16 — מה שהיה `middleware.ts`) מיישם Basic Auth single-user מול `BASIC_AUTH_USER`/`BASIC_AUTH_PASS` ב-`.env`. נתיבי `/api/webhooks/*` ו-`/api/cron/*` עוברים bypass — webhooks של Green API עושים אימות token בעצמם, ו-cron routes בודקים `Authorization: Bearer ${CRON_SECRET}` (שולח Vercel Cron אוטומטית).
 
 ### Path Alias
 

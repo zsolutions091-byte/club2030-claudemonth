@@ -1,5 +1,5 @@
 import 'server-only'
-import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3'
+import { PrismaNeon } from '@prisma/adapter-neon'
 import { PrismaClient } from '@/generated/prisma/client'
 
 const globalForPrisma = globalThis as unknown as {
@@ -7,12 +7,9 @@ const globalForPrisma = globalThis as unknown as {
 }
 
 function makeClient() {
-  const url = process.env.DATABASE_URL
-  if (!url) throw new Error('DATABASE_URL is not set')
-  // SQLite file paths in DATABASE_URL are written as `file:./dev.db` (relative to prisma/).
-  // The adapter expects an absolute or process-relative path; convert.
-  const filename = url.startsWith('file:') ? url.slice(5) : url
-  const adapter = new PrismaBetterSqlite3({ url: `file:${filename}` })
+  const connectionString = process.env.DATABASE_URL
+  if (!connectionString) throw new Error('DATABASE_URL is not set')
+  const adapter = new PrismaNeon({ connectionString })
   return new PrismaClient({ adapter })
 }
 

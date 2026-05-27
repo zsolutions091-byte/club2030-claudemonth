@@ -28,9 +28,8 @@ tags:
 
 | חלק | גרסה | הערה |
 |---|---|---|
-| Prisma | **7.8** | Prisma 7, לא 5/6 |
-| `@prisma/adapter-better-sqlite3` | 7.8 | adapter חובה ב-Prisma 7 |
-| `better-sqlite3` | 12.9 | SQLite native binding |
+| PostgreSQL | Neon | Production (Hobby plan); Local: default Postgres |
+| Prisma | **7.8** | Prisma 7, לא 5/6; default driver (אין adapter) |
 
 > [!example] Prisma 7 — נתיב מותאם
 > ```ts
@@ -40,6 +39,14 @@ tags:
 > }
 > ```
 > הקליינט נוצר ל-`src/generated/prisma/`, לא ל-`@prisma/client`. ייבוא תמיד דרך `import { prisma } from '@/lib/db'`. ראה `src/lib/db.ts`.
+
+## Deployment — Vercel + Neon
+
+| חלק | הערה |
+|---|---|
+| **Neon Postgres** | Production database (Hobby plan). Connection string ב-`DATABASE_URL`. |
+| **Vercel Cron** | Daily `reminders` sweep (06:00 UTC) ו-daily `daily-digest` (05:00 UTC). Vercel Hobby מגביל ל-cron יומי בלבד. |
+| **API Bypass** | `/api/cron/*` עוקף Basic Auth ב-`proxy.ts` (Bearer `CRON_SECRET`). |
 
 ## UI Layer
 

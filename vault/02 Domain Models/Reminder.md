@@ -6,16 +6,16 @@ tags:
   - model
   - domain/reminder
   - phase/2
-status: schema-only
+status: implemented
 phase: 2
 ---
 
 # Reminder
 
-תזכורת על [[Task]] — נשלחת בעתיד דרך WhatsApp ([[OutboundMessage]]).
+תזכורת על [[Task]] — נשלחת דרך WhatsApp ([[OutboundMessage]]) ב-scheduler כל 5 דקות.
 
-> [!warning] טרם מומש
-> מודל ה-schema מוכן. **אין scheduler, אין actions, אין UI**. ייכתב ב-Phase 2.
+> [!success] מומש
+> Wave B השלים את ה-implementation: scheduler cron, `runReminderSweep()`, integration עם tasks.ts helpers.
 
 ## שדות
 
