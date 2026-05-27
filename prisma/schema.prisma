@@ -1,0 +1,241 @@
+// Prisma schema — מערכת ניהול משימות אישית
+// PRD §2.2
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// === פרויקטים ===
+model Project {
+  id          String    @id @default(cuid())
+  name        String
+  color       String    @default("#4FD2D4")
+  icon        String?
+  parentId    String?
+  parent      Project?  @relation("ProjectHierarchy", fields: [parentId], references: [id])
+  children    Project[] @relation("ProjectHierarchy")
+  position    Int       @default(0)
+  isArchived  Boolean   @default(false)
+  archivedAt  DateTime?
+  tasks       Task[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([parentId])
+  @@index([isArchived, deletedAt])
+}
+
+// === תגיות ===
+model Tag {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  color     String    @default("#E63CA8")
+  tasks     TaskTag[]
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+}
+
+model TaskTag {
+  taskId String
+  tagId  String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, tagId])
+  @@index([tagId])
+}
+
+// === משימות ===
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING
+  DONE
+  CANCELLED
+}
+
+enum TaskPriority {
+  P1
+  P2
+  P3
+  P4
+}
+
+model Task {
+  id               String       @id @default(cuid())
+  title            String
+  description      String?
+  status           TaskStatus   @default(OPEN)
+  priority         TaskPriority @default(P4)
+
+  startDate        DateTime?
+  dueDate          DateTime?
+  dueHasTime       Boolean      @default(false)
+  completedAt      DateTime?
+  estimatedMinutes Int?
+
+  parentTaskId     String?
+  parentTask       Task?        @relation("TaskSubtasks", fields: [parentTaskId], references: [id])
+  subtasks         Task[]       @relation("TaskSubtasks")
+
+  projectId        String?
+  project          Project?     @relation(fields: [projectId], references: [id])
+  tags             TaskTag[]
+
+  recurrenceRule       String?
+  recurrenceParentId   String?
+  recurrenceParent     Task?    @relation("RecurrenceInstances", fields: [recurrenceParentId], references: [id])
+  recurrenceInstances  Task[]   @relation("RecurrenceInstances")
+  isRecurrenceTemplate Boolean  @default(false)
+
+  position         Int          @default(0)
+
+  events           TaskEvent[]
+  reminders        Reminder[]
+  outboundMessages OutboundMessage[]
+
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  deletedAt        DateTime?
+  archivedAt       DateTime?
+
+  @@index([status, dueDate])
+  @@index([projectId, status])
+  @@index([parentTaskId])
+  @@index([deletedAt])
+  @@index([archivedAt])
+  @@index([recurrenceParentId])
+}
+
+// === לוג אירועים ===
+enum EventType {
+  CREATED
+  UPDATED
+  STATUS_CHANGED
+  COMPLETED
+  REOPENED
+  ARCHIVED
+  DELETED
+  RESTORED
+  SNOOZED
+  REMINDER_SENT
+  REPLY_RECEIVED
+  COMMENT
+}
+
+enum EventActor {
+  USER
+  SYSTEM
+  WHATSAPP
+}
+
+model TaskEvent {
+  id        String     @id @default(cuid())
+  taskId    String
+  task      Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  type      EventType
+  actor     EventActor @default(USER)
+  payload   String?
+  note      String?
+  createdAt DateTime   @default(now())
+
+  @@index([taskId, createdAt])
+}
+
+// === תזכורות (מבנה ל-Phase 2) ===
+enum ReminderType {
+  BEFORE_DUE
+  AT_TIME
+  DAILY_DIGEST
+}
+
+enum ReminderChannel {
+  WHATSAPP
+  IN_APP
+}
+
+enum ReminderStatus {
+  SCHEDULED
+  SENT
+  FAILED
+  CANCELLED
+}
+
+model Reminder {
+  id            String          @id @default(cuid())
+  taskId        String
+  task          Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  type          ReminderType
+  channel       ReminderChannel @default(WHATSAPP)
+  offsetMinutes Int?
+  absoluteTime  String?
+  scheduledFor  DateTime?
+  status        ReminderStatus  @default(SCHEDULED)
+  sentAt        DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([scheduledFor, status])
+  @@index([taskId])
+}
+
+// === הודעות וואטסאפ (Phase 2) ===
+enum MessageDirection {
+  OUTBOUND
+  INBOUND
+}
+
+enum OutboundStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+model OutboundMessage {
+  id           String         @id @default(cuid())
+  taskId       String?
+  task         Task?          @relation(fields: [taskId], references: [id])
+  reminderId   String?
+  body         String
+  waMessageId  String?
+  status       OutboundStatus @default(PENDING)
+  errorMessage String?
+  sentAt       DateTime?
+  deliveredAt  DateTime?
+  readAt       DateTime?
+  createdAt    DateTime       @default(now())
+
+  @@index([taskId])
+  @@index([waMessageId])
+  @@index([status, createdAt])
+}
+
+model InboundMessage {
+  id            String    @id @default(cuid())
+  waMessageId   String?   @unique
+  body          String
+  rawWebhook    String
+  matchedTaskId String?
+  parsedAction  String?
+  processed     Boolean   @default(false)
+  processedAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([processed, createdAt])
+  @@index([matchedTaskId])
+}
+
+// === הגדרות ===
+model Settings {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}

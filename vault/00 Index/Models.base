@@ -1,0 +1,54 @@
+filters:
+  and:
+    - file.inFolder("02 Domain Models")
+    - 'file.ext == "md"'
+
+formulas:
+  status_icon: 'if(status == "active", "🟢", if(status == "schema-only", "🟡", "⚪"))'
+  phase_label: 'if(phase == 1, "Phase 1", if(phase == 2, "Phase 2", ""))'
+
+properties:
+  formula.status_icon:
+    displayName: ""
+  formula.phase_label:
+    displayName: "Phase"
+  status:
+    displayName: "Status"
+
+views:
+  - type: table
+    name: "כל המודלים"
+    order:
+      - formula.status_icon
+      - file.name
+      - formula.phase_label
+      - status
+    groupBy:
+      property: phase
+      direction: ASC
+
+  - type: cards
+    name: "Cards"
+    order:
+      - file.name
+      - formula.status_icon
+      - status
+      - formula.phase_label
+
+  - type: table
+    name: "Phase 1 בלבד"
+    filters:
+      and:
+        - 'phase == 1'
+    order:
+      - file.name
+      - status
+
+  - type: table
+    name: "Phase 2 — מתוכנן"
+    filters:
+      and:
+        - 'phase == 2'
+    order:
+      - file.name
+      - status
