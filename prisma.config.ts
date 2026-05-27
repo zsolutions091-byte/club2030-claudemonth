@@ -3,12 +3,18 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
+// Neon's pooled endpoint (-pooler) uses PgBouncer in transaction mode, which
+// can't sustain Prisma's session-level advisory locks during migrate. Strip
+// `-pooler` to get the direct endpoint — no-op for non-Neon Postgres URLs.
+const databaseUrl = process.env["DATABASE_URL"] ?? "";
+const directUrl = databaseUrl.replace("-pooler.", ".");
+
 export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    url: directUrl,
   },
 });
